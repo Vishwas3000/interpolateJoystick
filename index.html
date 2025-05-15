@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Ball Movement</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+
+        .container {
+            display: flex;
+            gap: 20px;
+            padding: 20px;
+            align-items: flex-start;
+        }
+
+        .canvas-container {
+            position: relative;
+            width: 800px;
+            height: 600px;
+        }
+
+        canvas {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            height: 100%;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 20px;
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            min-width: 300px;
+        }
+
+        select,
+        button {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+
+        .joystick-container {
+            width: 150px;
+            height: 150px;
+            background-color: #eee;
+            border-radius: 50%;
+            position: relative;
+            margin: 20px 0;
+        }
+
+        .joystick {
+            width: 50px;
+            height: 50px;
+            background-color: #4CAF50;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+        }
+
+        .equation-display {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+
+        .equation-display h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+
+        .equation-display p {
+            margin: 5px 0;
+            font-family: 'Courier New', monospace;
+            color: #666;
+        }
+
+        .parameter-display {
+            margin-top: 10px;
+            font-size: 0.9em;
+            color: #666;
+        }
+
+        .parameter-controls {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+        }
+
+        .parameter-controls label {
+            display: block;
+            margin: 10px 0 5px 0;
+            color: #333;
+        }
+
+        .parameter-controls input {
+            width: 100%;
+            padding: 5px;
+            margin-bottom: 10px;
+        }
+
+        .parameter-controls .value-display {
+            font-size: 0.9em;
+            color: #666;
+            margin-bottom: 10px;
+        }
+
+        .math-equation {
+            margin-top: 15px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #dee2e6;
+            font-family: 'Courier New', monospace;
+        }
+
+        .math-equation h4 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+
+        .math-equation p {
+            margin: 5px 0;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <div class="canvas-container">
+            <canvas id="gameCanvas" width="800" height="600"></canvas>
+        </div>
+        <div class="controls">
+            <h3>Movement Controls</h3>
+            <select id="movementType">
+                <option value="moveToward">Move Toward</option>
+                <option value="lerp">Lerp</option>
+                <option value="slerp">SLERP</option>
+                <option value="secondOrder">Second Order Dynamics</option>
+            </select>
+
+            <div class="parameter-controls">
+                <div id="moveTowardControls">
+                    <label for="speedControl">Speed:</label>
+                    <input type="range" id="speedControl" min="1" max="20" step="0.1" value="5">
+                    <div class="value-display">Value: <span id="speedValue">5</span></div>
+                </div>
+
+                <div id="lerpControls" style="display: none;">
+                    <label for="factorControl">Lerp Factor:</label>
+                    <input type="range" id="factorControl" min="0.01" max="0.5" step="0.01" value="0.1">
+                    <div class="value-display">Value: <span id="factorValue">0.1</span></div>
+                </div>
+
+                <div id="slerpControls" style="display: none;">
+                    <label for="slerpFactorControl">SLERP Factor:</label>
+                    <input type="range" id="slerpFactorControl" min="0.01" max="0.5" step="0.01" value="0.1">
+                    <div class="value-display">Value: <span id="slerpFactorValue">0.1</span></div>
+                </div>
+
+                <div id="secondOrderControls" style="display: none;">
+                    <label for="frequencyControl">Frequency:</label>
+                    <input type="range" id="frequencyControl" min="0.1" max="5" step="0.1" value="2">
+                    <div class="value-display">Value: <span id="frequencyValue">2</span></div>
+
+                    <label for="dampingControl">Damping:</label>
+                    <input type="range" id="dampingControl" min="0.1" max="1" step="0.1" value="0.5">
+                    <div class="value-display">Value: <span id="dampingValue">0.5</span></div>
+                </div>
+            </div>
+
+            <div class="joystick-container">
+                <div class="joystick" id="joystick"></div>
+            </div>
+            <div id="joystickValues">
+                X: 0, Y: 0
+            </div>
+
+            <div class="equation-display">
+                <h4>Current Movement Equation</h4>
+                <div id="equationText"></div>
+                <div class="parameter-display" id="parameterValues"></div>
+            </div>
+
+            <div class="math-equation">
+                <h4>Second Order Dynamics Equations</h4>
+                <p>ẍ + 2ζω₀ẋ + ω₀²x = ω₀²x_target</p>
+                <p>where:</p>
+                <p>ẍ = acceleration</p>
+                <p>ẋ = velocity</p>
+                <p>x = position</p>
+                <p>ζ = damping ratio</p>
+                <p>ω₀ = natural frequency</p>
+                <p>x_target = target position</p>
+            </div>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+
+</html>
