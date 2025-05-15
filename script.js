@@ -9,6 +9,19 @@ class Ball {
         this.velocityY = 0;
         this.lastX = x;
         this.lastY = y;
+        this.initialX = x;
+        this.initialY = y;
+    }
+
+    reset() {
+        this.x = this.initialX;
+        this.y = this.initialY;
+        this.targetX = this.initialX;
+        this.targetY = this.initialY;
+        this.velocityX = 0;
+        this.velocityY = 0;
+        this.lastX = this.initialX;
+        this.lastY = this.initialY;
     }
 
     moveToward(targetX, targetY, speed) {
@@ -28,35 +41,64 @@ class Ball {
     }
 
     slerp(targetX, targetY, factor) {
-        // Store last position for angle calculation
+        // Calculate vectors from current position to target
+        const currentVec = {
+            x: this.x - this.lastX,
+            y: this.y - this.lastY
+        };
+        const targetVec = {
+            x: targetX - this.x,
+            y: targetY - this.y
+        };
+
+        // Calculate magnitudes
+        const currentMag = Math.sqrt(currentVec.x * currentVec.x + currentVec.y * currentVec.y);
+        const targetMag = Math.sqrt(targetVec.x * targetVec.x + targetVec.y * targetVec.y);
+
+        // If either vector is too small, use direct movement
+        if (currentMag < 0.001 || targetMag < 0.001) {
+            this.x += (targetX - this.x) * factor;
+            this.y += (targetY - this.y) * factor;
+            return;
+        }
+
+        // Normalize vectors
+        const currentNorm = {
+            x: currentVec.x / currentMag,
+            y: currentVec.y / currentMag
+        };
+        const targetNorm = {
+            x: targetVec.x / targetMag,
+            y: targetVec.y / targetMag
+        };
+
+        // Calculate dot product
+        const dot = currentNorm.x * targetNorm.x + currentNorm.y * targetNorm.y;
+        
+        // Clamp dot product to prevent numerical errors
+        const clampedDot = Math.max(-1, Math.min(1, dot));
+        
+        // Calculate angle between vectors
+        const theta = Math.acos(clampedDot) * factor;
+
+        // Calculate perpendicular vector for rotation
+        const perp = {
+            x: currentNorm.y,
+            y: -currentNorm.x
+        };
+
+        // Calculate new position using SLERP formula
+        const sinTheta = Math.sin(theta);
+        const sinTheta1 = Math.sin((1 - factor) * theta);
+        const sinTheta2 = Math.sin(factor * theta);
+
+        // Store last position before updating
         this.lastX = this.x;
         this.lastY = this.y;
 
-        // Calculate vectors
-        const startVec = { x: this.lastX - this.x, y: this.lastY - this.y };
-        const targetVec = { x: targetX - this.x, y: targetY - this.y };
-
-        // Calculate angles
-        const startAngle = Math.atan2(startVec.y, startVec.x);
-        const targetAngle = Math.atan2(targetVec.y, targetVec.x);
-        
-        // Calculate angular distance
-        let angleDiff = targetAngle - startAngle;
-        if (angleDiff > Math.PI) angleDiff -= 2 * Math.PI;
-        if (angleDiff < -Math.PI) angleDiff += 2 * Math.PI;
-
-        // Interpolate angle
-        const newAngle = startAngle + angleDiff * factor;
-
-        // Calculate distance to target
-        const distance = Math.sqrt(
-            Math.pow(targetX - this.x, 2) + 
-            Math.pow(targetY - this.y, 2)
-        );
-
-        // Move along the interpolated angle
-        this.x += Math.cos(newAngle) * distance * factor;
-        this.y += Math.sin(newAngle) * distance * factor;
+        // Update position
+        this.x += (currentNorm.x * sinTheta1 + targetNorm.x * sinTheta2) * targetMag;
+        this.y += (currentNorm.y * sinTheta1 + targetNorm.y * sinTheta2) * targetMag;
     }
 
     secondOrderDynamics(targetX, targetY, frequency, damping) {
@@ -97,6 +139,7 @@ class Joystick {
         this.tolerance = 0.05;
         this.lastX = 0;
         this.lastY = 0;
+        this.joystickHalfSize = this.joystickRect.width / 2;
 
         this.setupEventListeners();
         this.updateContainerRect();
@@ -107,6 +150,8 @@ class Joystick {
         this.joystickRect = this.joystick.getBoundingClientRect();
         this.centerX = this.containerRect.left + this.containerRect.width / 2;
         this.centerY = this.containerRect.top + this.containerRect.height / 2;
+        this.joystickHalfSize = this.joystickRect.width / 2;
+        this.maxDistance = (this.containerRect.width - this.joystickRect.width) / 2;
     }
 
     setupEventListeners() {
@@ -134,22 +179,28 @@ class Joystick {
         const clientX = e.clientX || e.touches[0].clientX;
         const clientY = e.clientY || e.touches[0].clientY;
 
+        // Calculate position relative to container center
         let dx = clientX - this.centerX;
         let dy = clientY - this.centerY;
 
+        // Calculate distance from center
         const distance = Math.sqrt(dx * dx + dy * dy);
 
+        // If distance is greater than maxDistance, normalize to maxDistance
         if (distance > this.maxDistance) {
             dx = (dx / distance) * this.maxDistance;
             dy = (dy / distance) * this.maxDistance;
         }
 
+        // Calculate normalized values (-1 to 1)
         let newX = dx / this.maxDistance;
         let newY = dy / this.maxDistance;
 
+        // Apply dead zone
         if (Math.abs(newX) < this.tolerance) newX = 0;
         if (Math.abs(newY) < this.tolerance) newY = 0;
 
+        // Only update if values have changed significantly
         if (Math.abs(newX - this.lastX) > this.tolerance || 
             Math.abs(newY - this.lastY) > this.tolerance) {
             
@@ -158,7 +209,10 @@ class Joystick {
             this.lastX = newX;
             this.lastY = newY;
 
-            this.joystick.style.transform = `translate(${dx}px, ${dy}px)`;
+            // Update joystick position to match cursor exactly
+            this.joystick.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
+
+            // Update display
             document.getElementById('joystickValues').textContent = 
                 `X: ${this.x.toFixed(2)}, Y: ${this.y.toFixed(2)}`;
         }
@@ -375,6 +429,11 @@ updateParameterDisplays();
 
 // Show initial controls
 moveTowardControls.style.display = 'block';
+
+// Reset button event listener
+document.getElementById('resetButton').addEventListener('click', () => {
+    ball.reset();
+});
 
 // Start the game loop
 gameLoop(); 
