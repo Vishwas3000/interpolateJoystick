@@ -162,6 +162,10 @@
     <div class="container">
         <div class="canvas-container">
             <canvas id="gameCanvas" width="800" height="600"></canvas>
+            <div class="graph-container"
+                style="margin-top: 20px; background-color: white; border-radius: 8px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); padding: 15px; height: 300px; position: relative;">
+                <canvas id="functionGraph" width="800" height="300"></canvas>
+            </div>
         </div>
         <div class="controls">
             <h3>Movement Controls</h3>
@@ -170,6 +174,7 @@
                 <option value="lerp">Lerp</option>
                 <option value="slerp">SLERP</option>
                 <option value="secondOrder">Second Order Dynamics</option>
+                <option value="easeInOut">Ease In/Out</option>
             </select>
 
             <div class="parameter-controls">
@@ -199,6 +204,21 @@
                     <label for="dampingControl">Damping:</label>
                     <input type="range" id="dampingControl" min="0.1" max="1" step="0.1" value="0.5">
                     <div class="value-display">Value: <span id="dampingValue">0.5</span></div>
+                </div>
+
+                <div id="easeInOutControls" style="display: none;">
+                    <label for="easeStrengthControl">Ease Strength:</label>
+                    <input type="range" id="easeStrengthControl" min="1" max="5" step="0.1" value="2">
+                    <div class="value-display">Value: <span id="easeStrengthValue">2</span></div>
+
+                    <label for="easeTypeControl">Ease Type:</label>
+                    <select id="easeTypeControl">
+                        <option value="sine">Sine</option>
+                        <option value="quad">Quadratic</option>
+                        <option value="cubic">Cubic</option>
+                        <option value="quart">Quartic</option>
+                        <option value="quint">Quintic</option>
+                    </select>
                 </div>
             </div>
 
@@ -233,6 +253,8 @@
             </div>
         </div>
     </div>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom"></script>
     <script src="script.js"></script>
 </body>
 

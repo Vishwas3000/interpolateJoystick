@@ -11,6 +11,7 @@ class Ball {
         this.lastY = y;
         this.initialX = x;
         this.initialY = y;
+        this.easeProgress = 0;
     }
 
     reset() {
@@ -105,14 +106,67 @@ class Ball {
         const dx = targetX - this.x;
         const dy = targetY - this.y;
         
-        this.velocityX += dx * frequency * frequency * (1/60);
-        this.velocityY += dy * frequency * frequency * (1/60);
+        // Use damping parameter to control oscillation
+        const dampingFactor = Math.max(0.1, Math.min(1, damping));
+        const forceMultiplier = 2 * (1 + (1 - dampingFactor)); // Adjust force based on damping
         
-        this.velocityX *= (1 - damping);
-        this.velocityY *= (1 - damping);
+        this.velocityX += dx * frequency * frequency * (1/60) * forceMultiplier;
+        this.velocityY += dy * frequency * frequency * (1/60) * forceMultiplier;
+        
+        this.velocityX *= (1 - dampingFactor);
+        this.velocityY *= (1 - dampingFactor);
         
         this.x += this.velocityX;
         this.y += this.velocityY;
+    }
+
+    easeInOut(targetX, targetY, strength, easeType) {
+        // Calculate distance to target
+        const dx = targetX - this.x;
+        const dy = targetY - this.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance > 0.1) { // Only move if we're not very close to target
+            // Update ease progress
+            this.easeProgress = Math.min(1, this.easeProgress + 0.02);
+            
+            // Calculate ease factor based on type
+            let easeFactor;
+            switch (easeType) {
+                case 'sine':
+                    easeFactor = 0.5 - Math.cos(this.easeProgress * Math.PI) / 2;
+                    break;
+                case 'quad':
+                    easeFactor = this.easeProgress < 0.5
+                        ? 2 * this.easeProgress * this.easeProgress
+                        : 1 - Math.pow(-2 * this.easeProgress + 2, 2) / 2;
+                    break;
+                case 'cubic':
+                    easeFactor = this.easeProgress < 0.5
+                        ? 4 * this.easeProgress * this.easeProgress * this.easeProgress
+                        : 1 - Math.pow(-2 * this.easeProgress + 2, 3) / 2;
+                    break;
+                case 'quart':
+                    easeFactor = this.easeProgress < 0.5
+                        ? 8 * this.easeProgress * this.easeProgress * this.easeProgress * this.easeProgress
+                        : 1 - Math.pow(-2 * this.easeProgress + 2, 4) / 2;
+                    break;
+                case 'quint':
+                    easeFactor = this.easeProgress < 0.5
+                        ? 16 * this.easeProgress * this.easeProgress * this.easeProgress * this.easeProgress * this.easeProgress
+                        : 1 - Math.pow(-2 * this.easeProgress + 2, 5) / 2;
+                    break;
+            }
+            
+            // Apply ease factor to movement
+            const moveX = dx * easeFactor * strength * 0.1;
+            const moveY = dy * easeFactor * strength * 0.1;
+            
+            this.x += moveX;
+            this.y += moveY;
+        } else {
+            this.easeProgress = 0; // Reset progress when target is reached
+        }
     }
 
     draw(ctx) {
@@ -232,6 +286,296 @@ class Joystick {
 // Initialize canvas and context
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+const graphCanvas = document.getElementById('functionGraph');
+const graphCtx = graphCanvas.getContext('2d');
+
+// Graph configuration
+let functionChart = null;
+const graphData = {
+    labels: [],
+    datasets: [{
+        label: 'Position',
+        data: [],
+        borderColor: '#4CAF50',
+        tension: 0.4,
+        fill: false,
+        pointRadius: 0
+    }]
+};
+
+const graphConfig = {
+    type: 'line',
+    data: graphData,
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: {
+            mode: 'nearest',
+            axis: 'xy',
+            intersect: false
+        },
+        scales: {
+            x: {
+                title: {
+                    display: true,
+                    text: 'Time (t)',
+                    font: {
+                        weight: 'bold'
+                    }
+                },
+                beginAtZero: true,
+                grid: {
+                    display: true,
+                    color: 'rgba(0, 0, 0, 0.1)'
+                },
+                ticks: {
+                    stepSize: 0.2,
+                    callback: value => value.toFixed(1)
+                },
+                min: 0,
+                max: 1
+            },
+            y: {
+                title: {
+                    display: true,
+                    text: 'Position (p)',
+                    font: {
+                        weight: 'bold'
+                    }
+                },
+                beginAtZero: true,
+                grid: {
+                    display: true,
+                    color: 'rgba(0, 0, 0, 0.1)'
+                },
+                ticks: {
+                    stepSize: 0.2,
+                    callback: value => value.toFixed(1)
+                },
+                min: 0,
+                max: 2 // Increased max to show overshooting
+            }
+        },
+        plugins: {
+            legend: {
+                display: true,
+                position: 'top',
+                labels: {
+                    font: {
+                        weight: 'bold'
+                    }
+                }
+            },
+            tooltip: {
+                callbacks: {
+                    label: function(context) {
+                        return `Position: ${context.parsed.y.toFixed(3)}`;
+                    }
+                }
+            },
+            zoom: {
+                pan: {
+                    enabled: true,
+                    mode: 'xy',
+                    modifierKey: 'shift',
+                    limits: {
+                        x: {min: 0, max: 1},
+                        y: {min: 0, max: 2} // Increased max for zoom limits
+                    }
+                },
+                zoom: {
+                    wheel: {
+                        enabled: true,
+                        modifierKey: 'ctrl'
+                    },
+                    pinch: {
+                        enabled: true
+                    },
+                    mode: 'xy',
+                    drag: {
+                        enabled: true,
+                        modifierKey: 'alt'
+                    },
+                    limits: {
+                        x: {min: 0, max: 1},
+                        y: {min: 0, max: 2} // Increased max for zoom limits
+                    }
+                }
+            }
+        }
+    }
+};
+
+// Calculate interpolation points
+function calculateInterpolationPoints(movementType, factor) {
+    const points = [];
+    const steps = 100;
+    const startPoint = { x: 0, y: 0 };
+    const endPoint = { x: 1, y: 1 };
+    
+    for (let i = 0; i <= steps; i++) {
+        const t = i / steps;
+        let point;
+        
+        switch (movementType) {
+            case 'moveToward':
+                point = {
+                    x: t,
+                    y: Math.min(1, t * factor * 2)
+                };
+                break;
+            case 'lerp':
+                const lerpFactor = Math.min(1, factor * 2);
+                point = {
+                    x: t,
+                    y: startPoint.y + (endPoint.y - startPoint.y) * (1 - Math.pow(1 - t, lerpFactor))
+                };
+                break;
+            case 'slerp':
+                const slerpFactor = Math.min(1, factor * 2);
+                const angle = Math.PI * t * slerpFactor;
+                point = {
+                    x: t,
+                    y: Math.sin(angle) * slerpFactor
+                };
+                break;
+            case 'secondOrder':
+                const omega = 2 * Math.PI * factor;
+                const damping = movementParams.secondOrder.damping;
+                const dampingFactor = Math.max(0.1, Math.min(1, damping));
+                
+                // Calculate the oscillation with proper damping
+                const oscillation = Math.exp(-dampingFactor * omega * t) * Math.cos(omega * t);
+                
+                // Scale the oscillation based on damping
+                const amplitude = 0.5 * (1 + (1 - dampingFactor));
+                point = {
+                    x: t,
+                    y: 1 + (oscillation * amplitude)
+                };
+                break;
+            case 'easeInOut':
+                const easeType = movementParams.easeInOut.type;
+                let easeFactor;
+                switch (easeType) {
+                    case 'sine':
+                        easeFactor = 0.5 - Math.cos(t * Math.PI) / 2;
+                        break;
+                    case 'quad':
+                        easeFactor = t < 0.5
+                            ? 2 * t * t
+                            : 1 - Math.pow(-2 * t + 2, 2) / 2;
+                        break;
+                    case 'cubic':
+                        easeFactor = t < 0.5
+                            ? 4 * t * t * t
+                            : 1 - Math.pow(-2 * t + 2, 3) / 2;
+                        break;
+                    case 'quart':
+                        easeFactor = t < 0.5
+                            ? 8 * t * t * t * t
+                            : 1 - Math.pow(-2 * t + 2, 4) / 2;
+                        break;
+                    case 'quint':
+                        easeFactor = t < 0.5
+                            ? 16 * t * t * t * t * t
+                            : 1 - Math.pow(-2 * t + 2, 5) / 2;
+                        break;
+                }
+                point = {
+                    x: t,
+                    y: easeFactor * factor
+                };
+                break;
+        }
+        points.push(point);
+    }
+    return points;
+}
+
+// Update graph with interpolation points
+function updateInterpolationGraph(movementType, factor) {
+    const points = calculateInterpolationPoints(movementType, factor);
+    
+    // Update the data
+    graphData.labels = points.map(p => p.x);
+    graphData.datasets[0].data = points.map(p => p.y);
+    
+    // Update chart title and styling
+    graphData.datasets[0].label = `${movementType.charAt(0).toUpperCase() + movementType.slice(1)} Interpolation`;
+    if (movementType === 'secondOrder') {
+        graphData.datasets[0].label += ` (Damping: ${movementParams.secondOrder.damping.toFixed(1)})`;
+    }
+    graphData.datasets[0].borderWidth = 2;
+    
+    // Reset zoom to default view
+    if (functionChart) {
+        functionChart.resetZoom();
+    }
+    
+    functionChart.update();
+}
+
+// Add zoom controls to the graph container
+function addZoomControls() {
+    const graphContainer = document.querySelector('.graph-container');
+    const controlsDiv = document.createElement('div');
+    controlsDiv.style.marginTop = '10px';
+    controlsDiv.style.display = 'flex';
+    controlsDiv.style.gap = '10px';
+    controlsDiv.style.justifyContent = 'center';
+    controlsDiv.style.position = 'absolute';
+    controlsDiv.style.bottom = '10px';
+    controlsDiv.style.left = '50%';
+    controlsDiv.style.transform = 'translateX(-50%)';
+    controlsDiv.style.zIndex = '1';
+    
+    const buttons = [
+        { text: 'Reset View', action: () => functionChart.resetZoom() },
+        { text: 'Zoom In', action: () => functionChart.zoom(1.1) },
+        { text: 'Zoom Out', action: () => functionChart.zoom(0.9) }
+    ];
+    
+    buttons.forEach(btn => {
+        const button = document.createElement('button');
+        button.textContent = btn.text;
+        button.style.padding = '5px 10px';
+        button.style.borderRadius = '4px';
+        button.style.border = '1px solid #ccc';
+        button.style.background = '#fff';
+        button.style.cursor = 'pointer';
+        button.style.boxShadow = '0 1px 3px rgba(0,0,0,0.1)';
+        button.onclick = btn.action;
+        controlsDiv.appendChild(button);
+    });
+    
+    graphContainer.appendChild(controlsDiv);
+}
+
+// Initialize the graph
+function initGraph() {
+    if (functionChart) {
+        functionChart.destroy();
+    }
+    
+    // Set canvas size to match container
+    const container = document.querySelector('.graph-container');
+    const canvas = document.getElementById('functionGraph');
+    canvas.width = container.clientWidth - 30; // Account for padding
+    canvas.height = container.clientHeight - 60; // Account for padding and controls
+    
+    functionChart = new Chart(graphCtx, graphConfig);
+    updateInterpolationGraph('moveToward', movementParams.moveToward.speed / 10);
+    addZoomControls();
+}
+
+// Add window resize handler
+window.addEventListener('resize', () => {
+    if (functionChart) {
+        initGraph();
+    }
+});
 
 // Create ball and joystick instances
 const ball = new Ball(canvas.width / 2, canvas.height / 2, 20);
@@ -245,7 +589,8 @@ const movementParams = {
     moveToward: { speed: 5 },
     lerp: { factor: 0.1 },
     slerp: { factor: 0.1 },
-    secondOrder: { frequency: 2, damping: 0.5 }
+    secondOrder: { frequency: 2, damping: 0.5 },
+    easeInOut: { strength: 2, type: 'sine' }
 };
 
 // Calculate movement range based on canvas size
@@ -256,12 +601,15 @@ const moveTowardControls = document.getElementById('moveTowardControls');
 const lerpControls = document.getElementById('lerpControls');
 const slerpControls = document.getElementById('slerpControls');
 const secondOrderControls = document.getElementById('secondOrderControls');
+const easeInOutControls = document.getElementById('easeInOutControls');
 
 const speedControl = document.getElementById('speedControl');
 const factorControl = document.getElementById('factorControl');
 const slerpFactorControl = document.getElementById('slerpFactorControl');
 const frequencyControl = document.getElementById('frequencyControl');
 const dampingControl = document.getElementById('dampingControl');
+const easeStrengthControl = document.getElementById('easeStrengthControl');
+const easeTypeControl = document.getElementById('easeTypeControl');
 
 // Value display elements
 const speedValue = document.getElementById('speedValue');
@@ -269,6 +617,7 @@ const factorValue = document.getElementById('factorValue');
 const slerpFactorValue = document.getElementById('slerpFactorValue');
 const frequencyValue = document.getElementById('frequencyValue');
 const dampingValue = document.getElementById('dampingValue');
+const easeStrengthValue = document.getElementById('easeStrengthValue');
 
 // Update parameter displays
 function updateParameterDisplays() {
@@ -277,32 +626,49 @@ function updateParameterDisplays() {
     slerpFactorValue.textContent = movementParams.slerp.factor.toFixed(2);
     frequencyValue.textContent = movementParams.secondOrder.frequency.toFixed(1);
     dampingValue.textContent = movementParams.secondOrder.damping.toFixed(1);
+    easeStrengthValue.textContent = movementParams.easeInOut.strength.toFixed(1);
 }
 
 // Parameter control event listeners
 speedControl.addEventListener('input', (e) => {
     movementParams.moveToward.speed = parseFloat(e.target.value);
     updateParameterDisplays();
+    updateInterpolationGraph('moveToward', movementParams.moveToward.speed / 10);
 });
 
 factorControl.addEventListener('input', (e) => {
     movementParams.lerp.factor = parseFloat(e.target.value);
     updateParameterDisplays();
+    updateInterpolationGraph('lerp', movementParams.lerp.factor);
 });
 
 slerpFactorControl.addEventListener('input', (e) => {
     movementParams.slerp.factor = parseFloat(e.target.value);
     updateParameterDisplays();
+    updateInterpolationGraph('slerp', movementParams.slerp.factor);
 });
 
 frequencyControl.addEventListener('input', (e) => {
     movementParams.secondOrder.frequency = parseFloat(e.target.value);
     updateParameterDisplays();
+    updateInterpolationGraph('secondOrder', movementParams.secondOrder.frequency);
 });
 
 dampingControl.addEventListener('input', (e) => {
     movementParams.secondOrder.damping = parseFloat(e.target.value);
     updateParameterDisplays();
+    updateInterpolationGraph('secondOrder', movementParams.secondOrder.frequency);
+});
+
+easeStrengthControl.addEventListener('input', (e) => {
+    movementParams.easeInOut.strength = parseFloat(e.target.value);
+    updateParameterDisplays();
+    updateInterpolationGraph('easeInOut', movementParams.easeInOut.strength);
+});
+
+easeTypeControl.addEventListener('change', (e) => {
+    movementParams.easeInOut.type = e.target.value;
+    updateInterpolationGraph('easeInOut', movementParams.easeInOut.strength);
 });
 
 // Movement type change handler
@@ -314,20 +680,29 @@ document.getElementById('movementType').addEventListener('change', (e) => {
     lerpControls.style.display = 'none';
     slerpControls.style.display = 'none';
     secondOrderControls.style.display = 'none';
+    easeInOutControls.style.display = 'none';
     
     // Show relevant controls
     switch (movementType) {
         case 'moveToward':
             moveTowardControls.style.display = 'block';
+            updateInterpolationGraph(movementType, movementParams.moveToward.speed / 10);
             break;
         case 'lerp':
             lerpControls.style.display = 'block';
+            updateInterpolationGraph(movementType, movementParams.lerp.factor);
             break;
         case 'slerp':
             slerpControls.style.display = 'block';
+            updateInterpolationGraph(movementType, movementParams.slerp.factor);
             break;
         case 'secondOrder':
             secondOrderControls.style.display = 'block';
+            updateInterpolationGraph(movementType, movementParams.secondOrder.frequency);
+            break;
+        case 'easeInOut':
+            easeInOutControls.style.display = 'block';
+            updateInterpolationGraph(movementType, movementParams.easeInOut.strength);
             break;
     }
     
@@ -387,16 +762,26 @@ function updateEquationDisplay(movementType) {
                 <p>Damping: ${movementParams.secondOrder.damping}</p>
             `;
             break;
+        case 'easeInOut':
+            equationText.innerHTML = `
+                <p>Ease In/Out:</p>
+                <p>newPos = currentPos + (targetPos - currentPos) * strength * easeFactor</p>
+                <p>where strength = ${movementParams.easeInOut.strength}</p>
+            `;
+            parameterValues.innerHTML = `
+                <p>Parameters:</p>
+                <p>Strength: ${movementParams.easeInOut.strength}</p>
+                <p>Type: ${movementParams.easeInOut.type}</p>
+            `;
+            break;
     }
 }
 
-// Game loop
+// Remove the real-time graph updates from gameLoop
 function gameLoop() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
     const movementType = document.getElementById('movementType').value;
-
-    // Calculate target position with consistent range
     const targetX = canvas.width / 2 + joystick.x * movementRange;
     const targetY = canvas.height / 2 + joystick.y * movementRange;
 
@@ -418,6 +803,14 @@ function gameLoop() {
                 movementParams.secondOrder.damping
             );
             break;
+        case 'easeInOut':
+            ball.easeInOut(
+                targetX,
+                targetY,
+                movementParams.easeInOut.strength,
+                movementParams.easeInOut.type
+            );
+            break;
     }
 
     ball.draw(ctx);
@@ -430,9 +823,13 @@ updateParameterDisplays();
 // Show initial controls
 moveTowardControls.style.display = 'block';
 
+// Initialize graph
+initGraph();
+
 // Reset button event listener
 document.getElementById('resetButton').addEventListener('click', () => {
     ball.reset();
+    updateInterpolationGraph('moveToward', movementParams.moveToward.speed / 10);
 });
 
 // Start the game loop
